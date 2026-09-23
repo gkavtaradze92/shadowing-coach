@@ -1,5 +1,6 @@
-import { VOICES, DEFAULT_VOICE } from './tts.js';
+import { VOICES, DEFAULT_VOICE, loadEngine, synthesize } from './tts.js';
 import { splitScript } from './segmenter.js';
+import { buildTrack, toWavBlob } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -74,6 +75,7 @@ function renderSegments() {
   const n = state.segments.length;
   $('segments-empty').hidden = n > 0;
   $('segment-count').textContent = n ? `(${n})` : '';
+  updateGenerateButton();
 
   state.segments.forEach((text, i) => {
     const li = document.createElement('li');
@@ -94,6 +96,7 @@ function renderSegments() {
       rememberCaret();
       state.segments[i] = box.value;
       autoGrow(box);
+      updateGenerateButton();
     });
 
     const actions = document.createElement('div');
@@ -163,6 +166,80 @@ $('split-btn').addEventListener('click', () => {
   if (state.segments.length && !confirm('Replace your current segments?')) return;
   setSegments(splitScript(text));
 });
+
+// ---------- Generate ----------
+
+let generating = false;
+
+function updateGenerateButton() {
+  $('generate-btn').disabled = generating || state.segments.every((s) => !s.trim());
+}
+
+function showProgress(done, total, text) {
+  $('progress-wrap').hidden = false;
+  $('progress-bar').style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+  $('progress-text').textContent = text;
+}
+
+function setStatus(text) {
+  $('status').textContent = text;
+}
+
+function onEngineStatus(s) {
+  if (s.stage === 'loading') {
+    setStatus(s.firstDownload
+      ? 'Downloading the voice model — first time only (about 90 MB). This can take a minute or two. Next time it loads instantly.'
+      : 'Loading the voice…');
+  } else if (s.stage === 'download' && s.total) {
+    const mb = (n) => (n / 1e6).toFixed(0);
+    showProgress(s.loaded, s.total, `Downloading voice model: ${mb(s.loaded)} / ${mb(s.total)} MB`);
+  }
+}
+
+async function generate() {
+  const segments = state.segments.map((s) => s.trim()).filter(Boolean);
+  if (!segments.length) return;
+  const { voice, speed, pause } = state.settings;
+
+  generating = true;
+  updateGenerateButton();
+  setStatus('');
+  try {
+    showProgress(0, 1, 'Loading the voice…');
+    await loadEngine(onEngineStatus);
+    setStatus('');
+
+    const clips = [];
+    for (let i = 0; i < segments.length; i++) {
+      showProgress(i, segments.length, `Generating ${i + 1} / ${segments.length}`);
+      clips.push(await synthesize(segments[i], { voice, speed }));
+    }
+    showProgress(1, 1, `Done: ${segments.length} segments`);
+
+    const track = buildTrack(clips, pause);
+    state.track = { ...track, segments, settings: { voice, speed, pause } };
+    loadTrackIntoPlayer();
+  } catch (err) {
+    console.error(err);
+    $('progress-wrap').hidden = true;
+    setStatus(`Something went wrong: ${err.message}. Check your internet connection and try again.`);
+  } finally {
+    generating = false;
+    updateGenerateButton();
+  }
+}
+
+$('generate-btn').addEventListener('click', generate);
+
+// ---------- Player ----------
+
+function loadTrackIntoPlayer() {
+  const audio = $('audio');
+  if (audio.src) URL.revokeObjectURL(audio.src);
+  audio.src = URL.createObjectURL(toWavBlob(state.track.samples, state.track.sampleRate));
+  audio.controls = true;
+  $('player-empty').hidden = true;
+}
 
 // ---------- Start ----------
 
