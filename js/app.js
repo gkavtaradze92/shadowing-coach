@@ -1,4 +1,5 @@
 import { VOICES, DEFAULT_VOICE } from './tts.js';
+import { splitScript } from './segmenter.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -11,6 +12,7 @@ const MODES = [
 ];
 
 const state = {
+  segments: [],
   settings: {
     mode: 'repeat',
     voice: DEFAULT_VOICE,
@@ -59,7 +61,111 @@ function initVoiceSelect() {
   sel.addEventListener('change', () => { state.settings.voice = sel.value; });
 }
 
+// ---------- Segments ----------
+
+function setSegments(list) {
+  state.segments = list;
+  renderSegments();
+}
+
+function renderSegments() {
+  const list = $('segment-list');
+  list.innerHTML = '';
+  const n = state.segments.length;
+  $('segments-empty').hidden = n > 0;
+  $('segment-count').textContent = n ? `(${n})` : '';
+
+  state.segments.forEach((text, i) => {
+    const li = document.createElement('li');
+    li.className = 'segment';
+
+    const num = document.createElement('span');
+    num.className = 'segment-num';
+    num.textContent = i + 1;
+
+    const box = document.createElement('textarea');
+    box.className = 'segment-text';
+    box.rows = 1;
+    box.value = text;
+    box.dataset.caret = '';
+    const rememberCaret = () => { box.dataset.caret = box.selectionStart; };
+    for (const ev of ['click', 'keyup', 'select', 'focus']) box.addEventListener(ev, rememberCaret);
+    box.addEventListener('input', () => {
+      rememberCaret();
+      state.segments[i] = box.value;
+      autoGrow(box);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'segment-actions';
+    actions.append(
+      smallButton('Split here', () => splitSegment(i, box)),
+      smallButton('Merge ↓', () => mergeSegment(i), i === n - 1),
+      smallButton('Delete', () => deleteSegment(i), false, 'danger'),
+    );
+
+    const body = document.createElement('div');
+    body.className = 'segment-body';
+    body.append(box, actions);
+    li.append(num, body);
+    list.appendChild(li);
+    autoGrow(box);
+  });
+}
+
+function smallButton(label, onClick, disabled = false, extraClass = '') {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `btn small ${extraClass}`;
+  b.textContent = label;
+  b.disabled = disabled;
+  // Keep the cursor inside the text box when the button is pressed.
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function autoGrow(box) {
+  box.style.height = 'auto';
+  box.style.height = `${box.scrollHeight + 2}px`;
+}
+
+function splitSegment(i, box) {
+  const text = box.value;
+  const caret = Number(box.dataset.caret);
+  const before = text.slice(0, caret).trim();
+  const after = text.slice(caret).trim();
+  if (box.dataset.caret === '' || !before || !after) {
+    alert('Tap inside the text where you want to split, then press "Split here".');
+    return;
+  }
+  state.segments.splice(i, 1, before, after);
+  renderSegments();
+}
+
+function mergeSegment(i) {
+  const merged = `${state.segments[i].trim()} ${state.segments[i + 1].trim()}`;
+  state.segments.splice(i, 2, merged);
+  renderSegments();
+}
+
+function deleteSegment(i) {
+  state.segments.splice(i, 1);
+  renderSegments();
+}
+
+$('split-btn').addEventListener('click', () => {
+  const text = $('script-text').value.trim();
+  if (!text) {
+    alert('Paste a script first.');
+    return;
+  }
+  if (state.segments.length && !confirm('Replace your current segments?')) return;
+  setSegments(splitScript(text));
+});
+
 // ---------- Start ----------
 
 initVoiceSelect();
 renderSettings();
+renderSegments();
