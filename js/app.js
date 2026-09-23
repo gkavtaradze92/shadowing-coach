@@ -3,7 +3,7 @@ import { splitScript } from './segmenter.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SPEEDS = [0.75, 0.8, 0.85, 0.9, 1.0, 1.1, 1.2];
+const SPEEDS = [0.5, 0.75, 0.8, 0.85, 0.9, 1.0, 1.1, 1.2];
 const PAUSES = [0.5, 1, 1.5, 2, 3, 4];
 const MODES = [
   { id: 'repeat', label: 'Listen & Repeat' },
