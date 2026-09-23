@@ -23,7 +23,7 @@ let statusListener = () => {};
 
 function getWorker() {
   if (worker) return worker;
-  worker = new Worker(new URL('./kokoro-worker.js', import.meta.url), { type: 'module' });
+  worker = new Worker(new URL('./kokoro-worker.js?v=5', import.meta.url), { type: 'module' });
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.type === 'loading') {

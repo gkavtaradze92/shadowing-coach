@@ -1,6 +1,6 @@
-import { VOICES, DEFAULT_VOICE, loadEngine, synthesize } from './tts.js';
-import { splitScript } from './segmenter.js';
-import { buildTrack, toWavBlob } from './audio.js';
+import { VOICES, DEFAULT_VOICE, loadEngine, synthesize } from './tts.js?v=5';
+import { splitScript } from './segmenter.js?v=5';
+import { buildTrack, toWavBlob } from './audio.js?v=5';
 
 const $ = (id) => document.getElementById(id);
 
